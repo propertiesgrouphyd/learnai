@@ -1,0 +1,140 @@
+{
+  "day": 85,
+  "courseDate": "2026-11-12",
+  "publishAt": "2026-11-12T06:00:00+05:30",
+  "title": "Regularization: Overfitting ను నియంత్రించడం",
+  "introduction": "మోడల్‌ను నిజమైన ప్రపంచ డేటాపై బాగా పనిచేయించడానికి Regularization అనేది ముఖ్యమైన సాంకేతికత. ఇది మోడల్ సంక్లిష్టతను తగ్గించి, Overfitting ను నివారిస్తుంది.",
+  "sections": [
+    {
+      "heading": "Regularization అంటే ఏమిటి?",
+      "subheading": "మోడల్‌ను సాధారణీకరించడానికి సాంకేతికత",
+      "paragraphs": [
+        "Regularization అనేది మోడల్ శిక్షణ సమయంలో అదనపు పరిమితి (penalty) ను జోడించడం ద్వారా అతిగా సంక్లిష్టమైన పరిష్కారాలను దూరం చేయడానికి ఉపయోగిస్తారు.",
+        "ఈ పరిమితి మోడల్‌ను సరళంగా, సాధారణీకరించిన రూపంలో ఉంచుతుంది, తద్వారా కొత్త డేటాపై కూడా మంచి పనితీరు చూపుతుంది."
+      ],
+      "example": {
+        "title": "Regularization లేకుండా vs Regularization తో",
+        "content": "ఒక లీనియర్ రిగ్రెషన్‌లో 100 లక్షణాలు ఉంటే, Regularization లేకుండా అన్ని కోఎఫిషియంట్లు పెద్ద విలువలు తీసుకుని training data ను ఖచ్చితంగా ఫిట్ చేస్తాయి. Regularization జోడించినప్పుడు కోఎఫిషియంట్లు చిన్నవిగా, అవసరంలేని లక్షణాలు శూన్యానికి దగ్గరగా మారి, మోడల్ సాధారణీకరించబడుతుంది."
+      }
+    },
+    {
+      "heading": "మోడల్ సంక్లిష్టత మరియు Overfitting",
+      "subheading": "అతి సంక్లిష్ట మోడల్ ఎందుకు హానికరం",
+      "paragraphs": [
+        "మోడల్‌లో ఎక్కువ పరామితులు లేదా అధిక-డిగ్రీ పోలినోమియల్స్ ఉంటే, అది training data లోని శబ్దాన్ని కూడా నేర్చుకుంటుంది.",
+        "ఇది training error ను తగ్గించినప్పటికీ, కొత్త (test) డేటాపై error పెరుగుతుంది, దీనిని Overfitting అంటారు."
+      ],
+      "example": {
+        "title": "వెబ్‌సైట్ ట్రాఫిక్‌ను అంచనా",
+        "content": "10 రోజుల్లో రోజువారీ సందర్శకుల సంఖ్యను 5-డిగ్రీ పోలినోమియల్‌తో ఫిట్ చేస్తే, curve training points ను ఖచ్చితంగా దాటుతుంది, కానీ తదుపరి రోజుల్లో prediction చాలా తప్పుగా ఉంటుంది. సరళమైన లీనియర్ లేదా 2-డిగ్రీ పోలినోమియల్‌తో prediction స్థిరంగా ఉంటుంది."
+      }
+    },
+    {
+      "heading": "L1 Regularization (Lasso)",
+      "subheading": "స్పార్స్ కోఎఫిషియంట్లను ప్రోత్సహించే పద్ధతి",
+      "paragraphs": [
+        "L1 Regularization కోఎఫిషియంట్ల పరమ విలువల (absolute values) మొత్తానికి penalty ను జోడిస్తుంది.",
+        "ఈ penalty పెద్ద కోఎఫిషియంట్లను తగ్గించడమే కాక, కొన్ని కోఎఫిషియంట్లను పూర్తిగా శూన్యానికి దగ్గరగా చేస్తుంది, అందువల్ల మోడల్‌లో ముఖ్యమైన లక్షణాలు మాత్రమే మిగులుతాయి."
+      ],
+      "example": {
+        "title": "వెయిట్లను శూన్యానికి దగ్గర చేయడం",
+        "content": "మూడు లక్షణాలు x1, x2, x3 కలిగిన regression లో L1 penalty జోడించినప్పుడు, x2 యొక్క కోఎఫిషియంట్ 0.02 నుండి 0.0 కి తగ్గి, మోడల్ x1 మరియు x3 మాత్రమే ఉపయోగిస్తుంది."
+      }
+    },
+    {
+      "heading": "L2 Regularization (Ridge)",
+      "subheading": "వెయిట్లను చిన్నగా ఉంచే సున్నితమైన పద్ధతి",
+      "paragraphs": [
+        "L2 Regularization కోఎఫిషియంట్ల చదరపు (square) విలువల మొత్తానికి penalty ను జోడిస్తుంది.",
+        "ఇది అన్ని కోఎఫిషియంట్లను చిన్నవిగా చేస్తుంది, కానీ శూన్యానికి తగ్గించదు; అందువల్ల మోడల్‌లో అన్ని లక్షణాలు కొంతవరకు భాగస్వామ్యం చేస్తాయి."
+      ],
+      "example": {
+        "title": "వెయిట్లను సున్నితంగా తగ్గించడం",
+        "content": "అదే మూడు లక్షణాలు ఉన్న regression లో L2 penalty జోడించినప్పుడు, x1=1.2, x2=0.8, x3=0.5 వంటి విలువలు చిన్నవిగా మారి, కానీ ఏదీ పూర్తిగా 0 కాదు."
+      }
+    },
+    {
+      "heading": "Regularization మరియు Generalization",
+      "subheading": "మోడల్ కొత్త డేటాపై పనితీరు",
+      "paragraphs": [
+        "Regularization మోడల్‌ను training data కు అతిగా అనుకూలంగా కాకుండా, సాధారణ నమూనాలను నేర్చుకోవడానికి సహాయపడుతుంది.",
+        "అందువల్ల test set లేదా real-world data పై error తగ్గి, మోడల్ యొక్క generalization capability మెరుగుపడుతుంది."
+      ],
+      "example": {
+        "title": "టెస్ట్ సెట్లో మెరుగైన ఖచ్చితత్వం",
+        "content": "Ridge regression తో శిక్షణ పొందిన మోడల్ test error 12% కాగా, regularization లేకుండా training error 2% కానీ test error 25% గా ఉంటుంది. Regularization test error ను గణనీయంగా తగ్గిస్తుంది."
+      }
+    }
+  ],
+  "practice": {
+    "title": "సరళమైన Regularization ప్రయోగం",
+    "instruction": "Python (లేదా Excel) లో ఒక చిన్న డేటాసెట్ తీసుకుని, మొదట Linear Regression చేయండి, తర్వాత Ridge (L2) Regression ను 0.1, 1, 10 వంటి వివిధ regularization strength లతో అమలు చేసి, training error మరియు test error ను పోల్చండి. ఏ regularization strength ఉత్తమ generalization ఇస్తుందో గమనించండి."
+  },
+  "keyTakeaways": [
+    "Regularization మోడల్ సంక్లిష్టతను తగ్గించి Overfitting ను నివారిస్తుంది.",
+    "L1 Regularization కోఎఫిషియంట్లను శూన్యానికి దగ్గరగా చేసి, ముఖ్యమైన లక్షణాలను మాత్రమే ఉంచుతుంది.",
+    "L2 Regularization అన్ని కోఎఫిషియంట్లను చిన్నవిగా చేసి, మోడల్‌ను సున్నితంగా సాధారణీకరిస్తుంది."
+  ],
+  "mcqs": [
+    {
+      "question": "Regularization అంటే ఏమిటి?",
+      "options": [
+        "మోడల్ పరామితులను పెంచే పద్ధతి",
+        "శిక్షణ సమయంలో penalty జోడించి మోడల్‌ను సరళంగా చేయడం",
+        "డేటాను augment చేసే పద్ధతి",
+        "loss function ను తగ్గించే మాత్రమే"
+      ],
+      "answer": 1,
+      "explanation": "Regularization శిక్షణ సమయంలో penalty ను జోడించి మోడల్ సంక్లిష్టతను తగ్గిస్తుంది, తద్వారా అది సాధారణీకరించబడుతుంది."
+    },
+    {
+      "question": "Overfitting యొక్క ప్రధాన లక్షణం ఏది?",
+      "options": [
+        "training error తగ్గి test error పెరగడం",
+        "training error మరియు test error రెండూ తగ్గడం",
+        "training error పెరగడం",
+        "మోడల్ పరామితులు తగ్గడం"
+      ],
+      "answer": 0,
+      "explanation": "Overfitting లో మోడల్ training data ను బాగా ఫిట్ చేస్తుంది, కానీ కొత్త (test) డేటాపై error పెరుగుతుంది."
+    },
+    {
+      "question": "L1 Regularization (Lasso) యొక్క ప్రధాన ప్రభావం ఏమిటి?",
+      "options": [
+        "అన్ని కోఎఫిషియంట్లను చిన్నవిగా చేయడం",
+        "కోఎఫిషియంట్లను squared penalty",
+        "మోడల్ సంక్లిష్టతను పెంచడం",
+        "కొన్ని కోఎఫిషియంట్లను శూన్యానికి దగ్గరగా చేసి feature selection"
+      ],
+      "answer": 3,
+      "explanation": "L1 penalty పరమ విలువల మొత్తానికి శిక్షణ ఇస్తుంది, ఇది పెద్ద కోఎఫిషియంట్లను తగ్గించి, కొన్ని కోఎఫిషియంట్లను శూన్యానికి దగ్గరగా చేసి ముఖ్యమైన లక్షణాలను మాత్రమే ఉంచుతుంది."
+    },
+    {
+      "question": "L2 Regularization (Ridge) గురించి సరైన వివరణ ఏది?",
+      "options": [
+        "కోఎఫిషియంట్లను శూన్యానికి దగ్గరగా చేస్తుంది",
+        "feature selection ను బలంగా చేస్తుంది",
+        "కోఎఫిషియంట్ల చదరపు విలువలకు penalty జోడించి అన్ని కోఎఫిషియంట్లను చిన్నవిగా చేస్తుంది",
+        "training error ను పెంచుతుంది"
+      ],
+      "answer": 2,
+      "explanation": "L2 penalty కోఎఫిషియంట్ల చదరపు విలువల మొత్తానికి శిక్షణ ఇస్తుంది, ఇది అన్ని కోఎఫిషియంట్లను చిన్నవిగా చేస్తుంది, కానీ ఏదీ పూర్తిగా 0 కాదు."
+    },
+    {
+      "question": "Regularization లేకుండా training error 2% కానీ test error 25% ఉన్నప్పుడు, Ridge regression ద్వారా test error 12% అయితే, ఇది ఏమి సూచిస్తుంది?",
+      "options": [
+        "Regularization మోడల్‌ను overfit చేస్తుంది",
+        "Regularization generalization ను మెరుగుపరుస్తుంది",
+        "Ridge regression training errorను పెంచుతుంది",
+        "Regularization training dataను మార్చుతుంది"
+      ],
+      "answer": 1,
+      "explanation": "Ridge regression వంటి Regularization మోడల్‌ను training data కు అతిగా అనుకూలంగా కాకుండా, సాధారణ నమూనాలను నేర్చుకోవడానికి సహాయపడుతుంది, అందువల్ల test error తగ్గుతుంది."
+    }
+  ],
+  "aiUpdate": {
+    "enabled": false,
+    "title": "AI Update",
+    "items": []
+  }
+}

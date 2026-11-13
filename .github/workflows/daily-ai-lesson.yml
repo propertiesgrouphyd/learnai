@@ -1,0 +1,159 @@
+name: VIDHWAAN AIVidhya — Daily AI Lesson
+
+on:
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vidhwaan-aividhya-daily-generation
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    name: Generate Next Daily Lesson
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate project
+        run: npm run validate
+
+      - name: Validate Groq API configuration
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GROQ_MODEL: openai/gpt-oss-120b
+        run: |
+          node --input-type=module <<'NODE'
+          const key = process.env.GROQ_API_KEY;
+
+          if (!key) {
+            throw new Error("GROQ_API_KEY GitHub Secret is missing.");
+          }
+
+          if (!key.startsWith("gsk_")) {
+            throw new Error("GROQ_API_KEY does not have the expected Groq key format.");
+          }
+
+          console.log("GROQ_API_KEY: configured");
+          console.log("GROQ_MODEL:", process.env.GROQ_MODEL);
+          NODE
+
+      - name: Generate exactly one next lesson
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GROQ_MODEL: openai/gpt-oss-120b
+        run: node generator/generate-day.js
+
+      - name: Validate generated lesson files
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from "fs";
+
+          const files = fs.readdirSync("data")
+            .filter(name => /^day-\d{3}\.json$/.test(name))
+            .sort();
+
+          console.log(`Generated lesson files: ${files.length}`);
+
+          if (files.length > 365) {
+            throw new Error("More than 365 lesson files exist.");
+          }
+
+          let expected = 1;
+
+          for (const file of files) {
+            const match = file.match(/^day-(\d{3})\.json$/);
+            const day = Number(match[1]);
+
+            if (day !== expected) {
+              throw new Error(
+                `Lesson sequence broken. Expected Day ${expected}, found Day ${day}.`
+              );
+            }
+
+            const content = JSON.parse(
+              fs.readFileSync(`data/${file}`, "utf8")
+            );
+
+            if (Number(content.day) !== day) {
+              throw new Error(
+                `${file}: JSON day does not match filename.`
+              );
+            }
+
+            if (!content.courseDate) {
+              throw new Error(`${file}: missing courseDate.`);
+            }
+
+            if (!content.publishAt) {
+              throw new Error(`${file}: missing publishAt.`);
+            }
+
+            expected++;
+          }
+
+          console.log("Lesson sequence: VALID");
+          console.log("JSON metadata: VALID");
+          NODE
+
+      - name: Show repository changes
+        run: |
+          git status --short
+          git diff --stat
+
+      - name: Commit generated lesson
+        run: |
+          git add data/day-*.json
+
+          if git diff --cached --quiet; then
+            echo "No new lesson changes to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          NEXT_DAY=$(node --input-type=module <<'NODE'
+          import fs from "fs";
+
+          const files = fs.readdirSync("data")
+            .filter(name => /^day-\d{3}\.json$/.test(name));
+
+          let latest = 0;
+
+          for (const file of files) {
+            const match = file.match(/^day-(\d{3})\.json$/);
+            if (match) {
+              latest = Math.max(
+                latest,
+                Number(match[1])
+              );
+            }
+          }
+
+          console.log(latest);
+          NODE
+          )
+
+          git commit -m "chore: generate daily AI lesson"
+
+          git push
+
+          echo "Generated lesson committed and pushed."
+          echo "Latest generated day: ${NEXT_DAY}"

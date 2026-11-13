@@ -1,0 +1,13 @@
+{
+  "name": "vidhwaan-aividhya",
+  "version": "1.0.0",
+  "private": true,
+  "description": "VIDHWAAN AIVidhya - 365 Day Global AI Classes",
+  "type": "module",
+  "scripts": {
+    "validate": "node scripts/validate-project.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
