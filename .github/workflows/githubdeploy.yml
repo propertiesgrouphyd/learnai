@@ -1,3 +1,4 @@
+
 name: VIDHWAAN AIVidhya Github DEPLOY
 
 on:
@@ -13,52 +14,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-
   deploy:
-
     runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
 
     env:
       PROJECT_NAME: vidhwaan-vidhyai
 
     steps:
-
-      # ==========================================
       # CHECKOUT
-      # ==========================================
-
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-
-      # ==========================================
       # NODE
-      # ==========================================
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 24
 
-
-      # ==========================================
-      # INSTALL BUILD TOOLS
-      # ==========================================
-
-      - name: Install Protection Tools
+      # INSTALL TOOLS
+      - name: Install Production Tools
         run: |
-          npm install -g terser
-          npm install -g javascript-obfuscator
-          npm install -g clean-css-cli
-          npm install -g html-minifier-terser
+          npm install -g terser javascript-obfuscator clean-css-cli html-minifier-terser
 
-
-      # ==========================================
       # VALIDATE SOURCE
-      # ==========================================
-
       - name: Validate Application
+        env:
+          AIVIDHYA_DATA_KEY: ${{ secrets.AIVIDHYA_DATA_KEY }}
         run: |
+          set -euo pipefail
+
           node --check app.js
           node --check sw.js
           node --check scripts/protect-data.js
@@ -66,6 +54,16 @@ jobs:
 
           node --input-type=module <<'NODE'
           import fs from "node:fs";
+
+          const key = process.env.AIVIDHYA_DATA_KEY;
+
+          if (!key || !/^[A-Za-z0-9+/]+={0,2}$/.test(key)) {
+            throw new Error("AIVIDHYA_DATA_KEY is missing or invalid Base64.");
+          }
+
+          if (Buffer.from(key, "base64").length !== 32) {
+            throw new Error("AIVIDHYA_DATA_KEY must decode to 32 bytes.");
+          }
 
           const required = [
             "index.html",
@@ -77,7 +75,8 @@ jobs:
             "icons/logo.png",
             "icons/icon-192.png",
             "icons/icon-512.png",
-            "scripts/protect-data.js"
+            "scripts/protect-data.js",
+            "data/credentials.json"
           ];
 
           for (const file of required) {
@@ -86,33 +85,32 @@ jobs:
             }
           }
 
-          if (!fs.existsSync("data")) {
-            throw new Error("Missing data directory");
+          const lessons = fs.readdirSync("data")
+            .filter(f => /^day-\d{3}\.json$/.test(f));
+
+          if (!lessons.length) {
+            throw new Error("No day-XXX.json lesson files found.");
           }
 
-          const lessonFiles = fs
-            .readdirSync("data")
-            .filter(file => /^day-\d{3}\.json$/.test(file));
-
-          if (lessonFiles.length === 0) {
-            throw new Error("No lesson JSON files found in data/");
-          }
-
-          console.log(
-            `AIVidhya source validation: PASSED (${lessonFiles.length} lesson files)`
+          const credentials = JSON.parse(
+            fs.readFileSync("data/credentials.json", "utf8")
           );
+
+          if (!Array.isArray(credentials.users) || !credentials.users.length) {
+            throw new Error("credentials.json must contain users.");
+          }
+
+          console.log(`Source validation passed: ${lessons.length} lessons.`);
+          console.log(`Login users: ${credentials.users.length}`);
           NODE
 
-
-      # ==========================================
       # PREPARE DIST
-      # ==========================================
-
       - name: Prepare Dist
         run: |
-          rm -rf dist
+          set -euo pipefail
 
-          mkdir -p dist
+          rm -rf dist
+          mkdir -p dist/data
 
           cp index.html dist/
           cp main.css dist/
@@ -120,46 +118,29 @@ jobs:
           cp sw.js dist/
           cp manifest.json dist/
           cp favicon.ico dist/
-
           cp -r icons dist/
-
-          mkdir -p dist/data
 
           if [ -f CNAME ]; then
             cp CNAME dist/
           fi
 
-
-      # ==========================================
-      # PROTECT LESSON DATA
-      # ==========================================
-
-      - name: Protect Lesson Data
+      # PROTECT LESSONS AND LOGIN CREDENTIALS
+      - name: Protect Lesson and Credential Data
         env:
           AIVIDHYA_DATA_KEY: ${{ secrets.AIVIDHYA_DATA_KEY }}
-
         run: |
-          if [ -z "$AIVIDHYA_DATA_KEY" ]; then
-            echo "ERROR: AIVIDHYA_DATA_KEY GitHub Secret is missing."
-            exit 1
-          fi
+          set -euo pipefail
 
           node scripts/protect-data.js
 
+          test -f dist/data/credentials.dat
 
-      # ==========================================
-      # INJECT LESSON DECRYPTION KEY
-      # ==========================================
-
-      - name: Inject Lesson Decryption Key
+      # INJECT DECRYPTION KEY
+      - name: Inject Decryption Key
         env:
           AIVIDHYA_DATA_KEY: ${{ secrets.AIVIDHYA_DATA_KEY }}
-
         run: |
-          if [ -z "$AIVIDHYA_DATA_KEY" ]; then
-            echo "ERROR: AIVIDHYA_DATA_KEY GitHub Secret is missing."
-            exit 1
-          fi
+          set -euo pipefail
 
           node --input-type=module <<'NODE'
           import fs from "node:fs";
@@ -168,58 +149,38 @@ jobs:
           const key = process.env.AIVIDHYA_DATA_KEY;
           const placeholder = "__AIVIDHYA_DATA_KEY__";
 
-          const source = fs.readFileSync(file, "utf8");
-
-          const occurrences =
-            source.split(placeholder).length - 1;
-
-          if (occurrences !== 1) {
-            throw new Error(
-              `Expected exactly one decryption-key placeholder in dist/app.js; found ${occurrences}.`
-            );
-          }
-
           if (!/^[A-Za-z0-9+/]+={0,2}$/.test(key)) {
-            throw new Error(
-              "AIVIDHYA_DATA_KEY is not valid Base64."
-            );
+            throw new Error("Invalid Base64 encryption key.");
           }
 
-          const keyBytes = Buffer.from(key, "base64");
-
-          if (keyBytes.length !== 32) {
-            throw new Error(
-              "AIVIDHYA_DATA_KEY must decode to exactly 32 bytes (256 bits)."
-            );
+          if (Buffer.from(key, "base64").length !== 32) {
+            throw new Error("Encryption key must decode to 32 bytes.");
           }
 
-          const replacement = JSON.stringify(key);
+          const source = fs.readFileSync(file, "utf8");
+          const count = source.split(placeholder).length - 1;
+
+          if (count !== 1) {
+            throw new Error(`Expected one key placeholder, found ${count}.`);
+          }
 
           const updated = source.replace(
             `"${placeholder}"`,
-            replacement
+            JSON.stringify(key)
           );
 
           fs.writeFileSync(file, updated, "utf8");
 
           if (updated.includes(placeholder)) {
-            throw new Error(
-              "Decryption-key placeholder was not fully replaced."
-            );
+            throw new Error("Key placeholder replacement failed.");
           }
 
-          console.log(
-            "Lesson decryption key injected successfully."
-          );
+          console.log("AIVidhya decryption key injected.");
           NODE
 
           node --check dist/app.js
 
-
-      # ==========================================
       # MINIFY HTML
-      # ==========================================
-
       - name: Minify HTML
         run: |
           html-minifier-terser \
@@ -232,67 +193,36 @@ jobs:
             dist/index.html \
             -o dist/index.html
 
-
-      # ==========================================
-      # MAKE HTML SINGLE LINE
-      # ==========================================
-
+      # HTML SINGLE LINE
       - name: Make HTML Single Line
         run: |
           node --input-type=module <<'NODE'
           import fs from "node:fs";
-
           const file = "dist/index.html";
-
-          const content = fs
-            .readFileSync(file, "utf8")
-            .replace(/\r?\n|\r/g, "")
-            .trim();
-
-          fs.writeFileSync(file, content, "utf8");
-
-          console.log("HTML is now single-line.");
+          fs.writeFileSync(
+            file,
+            fs.readFileSync(file,"utf8").replace(/[\r\n]/g,"").trim()
+          );
           NODE
 
-
-      # ==========================================
       # MINIFY CSS
-      # ==========================================
-
       - name: Minify CSS
         run: |
-          cleancss \
-            -O2 \
-            dist/main.css \
-            -o dist/main.css
+          cleancss -O2 dist/main.css -o dist/main.css
 
-
-      # ==========================================
-      # MAKE CSS SINGLE LINE
-      # ==========================================
-
+      # CSS SINGLE LINE
       - name: Make CSS Single Line
         run: |
           node --input-type=module <<'NODE'
           import fs from "node:fs";
-
           const file = "dist/main.css";
-
-          const content = fs
-            .readFileSync(file, "utf8")
-            .replace(/\r?\n|\r/g, "")
-            .trim();
-
-          fs.writeFileSync(file, content, "utf8");
-
-          console.log("CSS is now single-line.");
+          fs.writeFileSync(
+            file,
+            fs.readFileSync(file,"utf8").replace(/[\r\n]/g,"").trim()
+          );
           NODE
 
-
-      # ==========================================
       # MINIFY JAVASCRIPT
-      # ==========================================
-
       - name: Minify JavaScript
         run: |
           terser dist/app.js \
@@ -300,11 +230,7 @@ jobs:
             --mangle \
             -o dist/app.js
 
-
-      # ==========================================
       # OBFUSCATE JAVASCRIPT
-      # ==========================================
-
       - name: Obfuscate JavaScript
         run: |
           javascript-obfuscator dist/app.js \
@@ -322,223 +248,122 @@ jobs:
             --string-array true \
             --string-array-encoding base64
 
-
-      # ==========================================
-      # VERIFY DECRYPTION KEY INJECTION
-      # ==========================================
-
-      - name: Verify Decryption Key Injection
+      # VERIFY KEY
+      - name: Verify Decryption Key
         run: |
+          set -euo pipefail
+
           if grep -Fq '__AIVIDHYA_DATA_KEY__' dist/app.js; then
-            echo "ERROR: Decryption-key placeholder still exists in production app.js."
+            echo "ERROR: Key placeholder remains."
             exit 1
           fi
 
-          echo "Decryption key injection: PASSED"
+          echo "Decryption key injection passed."
 
-
-      # ==========================================
       # CACHE VERSION
-      # ==========================================
-
       - name: Generate Asset Version
         run: |
           VERSION=$(date +%s)
-
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-
           echo "Asset version: $VERSION"
 
-
-      # ==========================================
-      # CACHE BUST HTML ASSETS
-      # ==========================================
-
+      # CACHE BUST
       - name: Apply Asset Cache Busting
         run: |
-          sed -i \
-            "s|href=\"./main.css\"|href=\"./main.css?v=$VERSION\"|g" \
-            dist/index.html
+          set -euo pipefail
 
-          sed -i \
-            "s|src=\"./app.js\"|src=\"./app.js?v=$VERSION\"|g" \
-            dist/index.html
+          sed -i "s|href=\"./main.css\"|href=\"./main.css?v=$VERSION\"|g" dist/index.html
+          sed -i "s|src=\"./app.js\"|src=\"./app.js?v=$VERSION\"|g" dist/index.html
+          sed -i "s|href=\"./manifest.json\"|href=\"./manifest.json?v=$VERSION\"|g" dist/index.html
 
-          sed -i \
-            "s|href=\"./manifest.json\"|href=\"./manifest.json?v=$VERSION\"|g" \
-            dist/index.html
-
-
-      # ==========================================
-      # VERIFY HTML AND CSS SINGLE LINE
-      # ==========================================
-
-      - name: Verify HTML and CSS Single Line
+      # VERIFY HTML CSS
+      - name: Verify HTML and CSS
         run: |
+          set -euo pipefail
+
           node --input-type=module <<'NODE'
           import fs from "node:fs";
 
-          const files = [
-            "dist/index.html",
-            "dist/main.css"
-          ];
-
-          for (const file of files) {
-            if (!fs.existsSync(file)) {
-              throw new Error(`Missing file: ${file}`);
-            }
-
-            const content = fs.readFileSync(file, "utf8");
+          for (const file of ["dist/index.html","dist/main.css"]) {
+            const content = fs.readFileSync(file,"utf8");
 
             if (/[\r\n]/.test(content)) {
-              throw new Error(
-                `${file} is not single-line.`
-              );
+              throw new Error(`${file} is not single-line.`);
             }
 
-            console.log(
-              `✓ Single-line verified: ${file}`
-            );
+            console.log(`Single-line verified: ${file}`);
           }
-
-          console.log(
-            "HTML/CSS single-line verification: PASSED"
-          );
           NODE
 
-
-      # ==========================================
-      # VERIFY PRODUCTION BUILD
-      # ==========================================
-
+      # VERIFY PRODUCTION DATA
       - name: Verify Production Build
         run: |
-          echo "=============================================="
-          echo "AIVIDHYA PRODUCTION BUILD"
-          echo "=============================================="
+          set -euo pipefail
 
-          find dist -maxdepth 2 -type f | sort
-
-          echo
-          echo "=============================================="
-          echo "PROTECTED LESSON FILES"
-          echo "=============================================="
-
-          ls -lh dist/data/day-*.dat
-
-          DAT_COUNT=$(find dist/data -maxdepth 1 -type f -name 'day-*.dat' | wc -l)
-          JSON_COUNT=$(find dist/data -maxdepth 1 -type f -name 'day-*.json' | wc -l)
           SOURCE_COUNT=$(find data -maxdepth 1 -type f -name 'day-*.json' | wc -l)
+          DAT_COUNT=$(find dist/data -maxdepth 1 -type f -name 'day-*.dat' | wc -l)
+          JSON_COUNT=$(find dist/data -maxdepth 1 -type f -name '*.json' | wc -l)
 
-          echo "Source JSON files  : $SOURCE_COUNT"
-          echo "Protected DAT files: $DAT_COUNT"
-          echo "JSON in dist/data  : $JSON_COUNT"
+          echo "Source lessons : $SOURCE_COUNT"
+          echo "Protected DAT  : $DAT_COUNT"
+          echo "Plain JSON     : $JSON_COUNT"
 
-          if [ "$DAT_COUNT" -ne "$SOURCE_COUNT" ]; then
-            echo "ERROR: Protected lesson count does not match source lesson count."
-            exit 1
-          fi
+          test "$DAT_COUNT" -eq "$((SOURCE_COUNT + 1))"
+          test "$JSON_COUNT" -eq 0
+          test -f dist/data/credentials.dat
 
-          if [ "$JSON_COUNT" -ne 0 ]; then
-            echo "ERROR: Plain JSON files found inside dist/data."
-            exit 1
-          fi
-
-          if grep -Fq '__AIVIDHYA_DATA_KEY__' dist/app.js; then
-            echo "ERROR: Plain decryption-key placeholder found in production app.js."
-            exit 1
-          fi
-
-          echo "Lesson protection: PASSED"
-
-          echo
-          echo "=============================================="
-          echo "BUILD SIZES"
-          echo "=============================================="
-
-          du -sh dist
-
-          du -h \
+          for file in \
             dist/index.html \
             dist/main.css \
             dist/app.js \
-            dist/sw.js
+            dist/sw.js \
+            dist/manifest.json \
+            dist/favicon.ico \
+            dist/icons/logo.png \
+            dist/icons/icon-192.png \
+            dist/icons/icon-512.png
+          do
+            test -f "$file"
+          done
+
+          echo "Production verification passed."
 
           echo
-          echo "=============================================="
-          echo "BUILD VALIDATION"
-          echo "=============================================="
+          echo "PROTECTED FILES:"
+          ls -lh dist/data/*.dat
 
-          test -f dist/index.html
-          test -f dist/main.css
-          test -f dist/app.js
-          test -f dist/sw.js
-          test -f dist/manifest.json
-          test -f dist/favicon.ico
-          test -f dist/icons/logo.png
-          test -f dist/icons/icon-192.png
-          test -f dist/icons/icon-512.png
+          echo
+          echo "BUILD SIZE:"
+          du -sh dist
 
-          test "$JSON_COUNT" -eq 0
-          test "$DAT_COUNT" -eq "$SOURCE_COUNT"
-
-          echo "Production build: PASSED"
-
-
-      # ==========================================
-      # CONFIGURE GITHUB PAGES
-      # ==========================================
-
+      # CONFIGURE PAGES
       - name: Setup GitHub Pages
         uses: actions/configure-pages@v5
 
-
-      # ==========================================
-      # UPLOAD GITHUB PAGES ARTIFACT
-      # ==========================================
-
+      # UPLOAD
       - name: Upload GitHub Pages Artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./dist
 
-
-      # ==========================================
-      # DEPLOY TO GITHUB PAGES
-      # ==========================================
-
+      # DEPLOY
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
 
-
-      # ==========================================
       # SUCCESS
-      # ==========================================
-
       - name: Deployment Success
         run: |
           echo "=============================================="
-          echo " VIDHWAAN AIVidhya DEPLOYMENT SUCCESS"
+          echo " VIDHWAAN AIVIDHYA DEPLOYMENT SUCCESS"
           echo "=============================================="
-
           echo "Project : $PROJECT_NAME"
           echo "Version : $VERSION"
-
-          echo
-          echo "PWA:"
-          echo "✓ HTML minified"
-          echo "✓ HTML single-line"
-          echo "✓ CSS minified"
-          echo "✓ CSS single-line"
-          echo "✓ JavaScript minified"
-          echo "✓ JavaScript obfuscated"
-          echo "✓ Lesson JSON AES-256-GCM protected"
+          echo "✓ Login credentials AES-256-GCM protected"
+          echo "✓ Lessons AES-256-GCM protected"
+          echo "✓ credentials.dat deployed"
           echo "✓ Plain JSON excluded from dist"
-          echo "✓ Only .dat lesson files deployed"
-          echo "✓ app.js left in obfuscator output format"
-          echo "✓ sw.js left unchanged after source copy"
-          echo "✓ manifest.json left unchanged"
-          echo "✓ Cache busting enabled"
-          echo "✓ PWA service worker preserved"
-          echo "✓ GitHub Pages deployment complete"
+          echo "✓ HTML/CSS single-line"
+          echo "✓ JavaScript minified and obfuscated"
+          echo "✓ PWA deployment completed"
+          echo "=============================================="
