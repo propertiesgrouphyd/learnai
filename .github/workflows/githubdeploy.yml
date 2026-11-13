@@ -25,6 +25,7 @@ jobs:
       PROJECT_NAME: vidhwaan-vidhyai
 
     steps:
+
       # CHECKOUT
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -125,6 +126,9 @@ jobs:
             cp CNAME dist/
           fi
 
+          echo "Dist prepared."
+          find dist -maxdepth 2 -type f
+
       # PROTECT LESSONS AND LOGIN CREDENTIALS
       - name: Protect Lesson and Credential Data
         env:
@@ -134,7 +138,16 @@ jobs:
 
           node scripts/protect-data.js
 
-          test -f dist/data/credentials.dat
+          echo "Checking credentials.dat..."
+          test -s dist/data/credentials.dat
+
+          echo "Checking protected lesson files..."
+          find dist/data -maxdepth 1 -type f -name 'day-*.dat' -print
+
+          echo "Credentials file:"
+          ls -lh dist/data/credentials.dat
+
+          echo "Data protection passed."
 
       # INJECT DECRYPTION KEY
       - name: Inject Decryption Key
@@ -184,6 +197,8 @@ jobs:
       # MINIFY HTML
       - name: Minify HTML
         run: |
+          set -euo pipefail
+
           html-minifier-terser \
             --collapse-whitespace \
             --remove-comments \
@@ -197,6 +212,8 @@ jobs:
       # HTML SINGLE LINE
       - name: Make HTML Single Line
         run: |
+          set -euo pipefail
+
           node --input-type=module <<'NODE'
           import fs from "node:fs";
 
@@ -211,11 +228,15 @@ jobs:
       # MINIFY CSS
       - name: Minify CSS
         run: |
+          set -euo pipefail
+
           cleancss -O2 dist/main.css -o dist/main.css
 
       # CSS SINGLE LINE
       - name: Make CSS Single Line
         run: |
+          set -euo pipefail
+
           node --input-type=module <<'NODE'
           import fs from "node:fs";
 
@@ -230,6 +251,8 @@ jobs:
       # MINIFY JAVASCRIPT
       - name: Minify JavaScript
         run: |
+          set -euo pipefail
+
           terser dist/app.js \
             --compress \
             --mangle \
@@ -238,6 +261,8 @@ jobs:
       # OBFUSCATE JAVASCRIPT
       - name: Obfuscate JavaScript
         run: |
+          set -euo pipefail
+
           javascript-obfuscator dist/app.js \
             --output dist/app.js \
             --compact true \
@@ -268,8 +293,11 @@ jobs:
       # CACHE VERSION
       - name: Generate Asset Version
         run: |
+          set -euo pipefail
+
           VERSION=$(date +%s)
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
           echo "Asset version: $VERSION"
 
       # CACHE BUST
@@ -277,9 +305,36 @@ jobs:
         run: |
           set -euo pipefail
 
-          sed -i "s|href=\"./main.css\"|href=\"./main.css?v=$VERSION\"|g" dist/index.html
-          sed -i "s|src=\"./app.js\"|src=\"./app.js?v=$VERSION\"|g" dist/index.html
-          sed -i "s|href=\"./manifest.json\"|href=\"./manifest.json?v=$VERSION\"|g" dist/index.html
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+
+          const file = "dist/index.html";
+          const version = process.env.VERSION;
+
+          let html = fs.readFileSync(file, "utf8");
+
+          // CSS cache busting
+          html = html.replace(
+            /href=["'](?:\.\/)?main\.css(?:\?[^"']*)?["']/g,
+            `href="./main.css?v=${version}"`
+          );
+
+          // JavaScript cache busting
+          html = html.replace(
+            /src=["'](?:\.\/)?app\.js(?:\?[^"']*)?["']/g,
+            `src="./app.js?v=${version}"`
+          );
+
+          // Manifest cache busting
+          html = html.replace(
+            /href=["'](?:\.\/)?manifest\.json(?:\?[^"']*)?["']/g,
+            `href="./manifest.json?v=${version}"`
+          );
+
+          fs.writeFileSync(file, html, "utf8");
+
+          console.log("Asset cache busting applied.");
+          NODE
 
       # VERIFY HTML CSS
       - name: Verify HTML and CSS
@@ -321,7 +376,7 @@ jobs:
           test "$LESSON_DAT_COUNT" -eq "$SOURCE_COUNT"
           test "$TOTAL_DAT_COUNT" -eq "$((SOURCE_COUNT + 1))"
           test "$JSON_COUNT" -eq 0
-          test -f dist/data/credentials.dat
+          test -s dist/data/credentials.dat
 
           for file in \
             dist/index.html \
@@ -334,7 +389,7 @@ jobs:
             dist/icons/icon-192.png \
             dist/icons/icon-512.png
           do
-            test -f "$file"
+            test -s "$file"
           done
 
           echo "Production verification passed."
@@ -362,9 +417,54 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
+      # VERIFY LIVE CREDENTIALS ENDPOINT
+      - name: Verify Deployed Credentials Endpoint
+        run: |
+          set -euo pipefail
+
+          BASE_URL="${{ steps.deployment.outputs.page_url }}"
+          URL="${BASE_URL%/}/data/credentials.dat"
+
+          echo "Checking deployed endpoint:"
+          echo "$URL"
+
+          for attempt in {1..12}; do
+
+            HTTP_CODE=$(curl \
+              --location \
+              --silent \
+              --show-error \
+              --output /tmp/credentials.dat \
+              --write-out "%{http_code}" \
+              "$URL" || true)
+
+            if [ "$HTTP_CODE" = "200" ] && [ -s /tmp/credentials.dat ]; then
+
+              echo "HTTP status: $HTTP_CODE"
+              echo "Downloaded credentials file:"
+              ls -lh /tmp/credentials.dat
+
+              echo "LIVE CREDENTIALS ENDPOINT VERIFIED."
+              exit 0
+
+            fi
+
+            echo "Attempt $attempt: HTTP $HTTP_CODE"
+            sleep 5
+
+          done
+
+          echo "ERROR: Live credentials endpoint verification failed."
+          echo "URL: $URL"
+          echo "HTTP status: $HTTP_CODE"
+
+          exit 1
+
       # SUCCESS
       - name: Deployment Success
         run: |
+          set -euo pipefail
+
           echo "=============================================="
           echo " VIDHWAAN AIVIDHYA DEPLOYMENT SUCCESS"
           echo "=============================================="
@@ -372,7 +472,8 @@ jobs:
           echo "Version : $VERSION"
           echo "✓ Login credentials AES-256-GCM protected"
           echo "✓ Lessons AES-256-GCM protected"
-          echo "✓ credentials.dat deployed"
+          echo "✓ credentials.dat generated"
+          echo "✓ credentials.dat deployed and live verified"
           echo "✓ Plain JSON excluded from dist"
           echo "✓ HTML/CSS single-line"
           echo "✓ JavaScript minified and obfuscated"
