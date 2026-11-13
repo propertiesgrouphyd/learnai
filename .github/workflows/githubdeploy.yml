@@ -50,6 +50,7 @@ jobs:
           node --check app.js
           node --check sw.js
           node --check scripts/protect-data.js
+
           npm run validate
 
           node --input-type=module <<'NODE'
@@ -198,10 +199,12 @@ jobs:
         run: |
           node --input-type=module <<'NODE'
           import fs from "node:fs";
+
           const file = "dist/index.html";
+
           fs.writeFileSync(
             file,
-            fs.readFileSync(file,"utf8").replace(/[\r\n]/g,"").trim()
+            fs.readFileSync(file, "utf8").replace(/[\r\n]/g, "").trim()
           );
           NODE
 
@@ -215,10 +218,12 @@ jobs:
         run: |
           node --input-type=module <<'NODE'
           import fs from "node:fs";
+
           const file = "dist/main.css";
+
           fs.writeFileSync(
             file,
-            fs.readFileSync(file,"utf8").replace(/[\r\n]/g,"").trim()
+            fs.readFileSync(file, "utf8").replace(/[\r\n]/g, "").trim()
           );
           NODE
 
@@ -284,8 +289,8 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from "node:fs";
 
-          for (const file of ["dist/index.html","dist/main.css"]) {
-            const content = fs.readFileSync(file,"utf8");
+          for (const file of ["dist/index.html", "dist/main.css"]) {
+            const content = fs.readFileSync(file, "utf8");
 
             if (/[\r\n]/.test(content)) {
               throw new Error(`${file} is not single-line.`);
@@ -295,20 +300,26 @@ jobs:
           }
           NODE
 
-      # VERIFY PRODUCTION DATA
+      # VERIFY PRODUCTION BUILD
       - name: Verify Production Build
         run: |
           set -euo pipefail
 
           SOURCE_COUNT=$(find data -maxdepth 1 -type f -name 'day-*.json' | wc -l)
-          DAT_COUNT=$(find dist/data -maxdepth 1 -type f -name 'day-*.dat' | wc -l)
+
+          LESSON_DAT_COUNT=$(find dist/data -maxdepth 1 -type f -name 'day-*.dat' | wc -l)
+
+          TOTAL_DAT_COUNT=$(find dist/data -maxdepth 1 -type f -name '*.dat' | wc -l)
+
           JSON_COUNT=$(find dist/data -maxdepth 1 -type f -name '*.json' | wc -l)
 
-          echo "Source lessons : $SOURCE_COUNT"
-          echo "Protected DAT  : $DAT_COUNT"
-          echo "Plain JSON     : $JSON_COUNT"
+          echo "Source lessons       : $SOURCE_COUNT"
+          echo "Protected lessons    : $LESSON_DAT_COUNT"
+          echo "Total protected DAT  : $TOTAL_DAT_COUNT"
+          echo "Plain JSON           : $JSON_COUNT"
 
-          test "$DAT_COUNT" -eq "$((SOURCE_COUNT + 1))"
+          test "$LESSON_DAT_COUNT" -eq "$SOURCE_COUNT"
+          test "$TOTAL_DAT_COUNT" -eq "$((SOURCE_COUNT + 1))"
           test "$JSON_COUNT" -eq 0
           test -f dist/data/credentials.dat
 
